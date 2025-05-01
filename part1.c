@@ -83,7 +83,8 @@ int main(int argc, char* argv[]) {
         }
 
         // Free memory used by strdup
-        for (int k = 0; k < j; k++) {
+        for (int k = 0; k < j; k++) 
+		{
             free(buff[k]);
         }
     }
@@ -96,5 +97,4 @@ int main(int argc, char* argv[]) {
 	// Close and free then exit using system cmd 
     fclose(in_fp); if (line) free(line); exit(0);
 
-    return 0;
 }
