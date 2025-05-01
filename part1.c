@@ -3,78 +3,98 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <stdlib.h> 
-
+#include <sys/wait.h>
+#include <stdlib.h>
 
 #define MAXPROCESS 500
 
-int c;
-char* error;
-char* in_file;
-FILE* in_fp;
-int line_number = 0;
+int main(int argc, char* argv[]) {
+    char* error;
+    char* in_file;
+    FILE* in_fp;
+    char* line = NULL;
+    size_t len = 0;
+    ssize_t read_int;
 
-pid_t pid_array[MAXPROCESS];
+    pid_t pid_array[MAXPROCESS];
+    int process_count = 0;
 
-// File for part 1 of Project 2
-int main(int argc, char* argv[]){
+    // Validate argument
+    if (argc != 2) {
+        error = "Usage: ./part1 <input.txt>\n";
+        write(STDERR_FILENO, error, strlen(error));
+        return 1;
+    }
 
-	printf("Running Part 1\n");
+    in_file = argv[1];
+    int in_fd = open(in_file, O_RDONLY);
+    if (in_fd == -1) {
+        error = "Cannot open input file\n";
+        write(STDERR_FILENO, error, strlen(error));
+        return 1;
+    }
 
-	if (argc != 2){
-		error = "Usage: ./part1 <input.txt>\n";
-		write(STDERR_FILENO, error, strlen(error));
-		return 1;
-	}
+    in_fp = fdopen(in_fd, "r");
+    if (!in_fp) {
+        error = "Cannot fdopen input file\n";
+        write(STDERR_FILENO, error, strlen(error));
+        close(in_fd);
+        return 1;
+    }
 
-	else
-	{	
-		in_file = argv[1];
-		printf("file is %s\n", in_file);
-		int in_fd = open(in_file, O_RDONLY);
-        if (in_fd == -1) {
-			error = "Can not open(in_file)\n";
+	// changed for (int i = 0; i < line_number, i++ )
+    while ((read_int = getline(&line, &len, in_fp)) != -1) {
+
+        // Parse tokens
+        char* buff[100]; 
+        int j = 0;
+        char* token = strtok(line, " \n");
+        while (token != NULL) {
+            buff[j++] = strdup(token);
+            token = strtok(NULL, " \n");
+        }
+        buff[j] = NULL; 
+
+        // Fork process
+        pid_t pid = fork();
+        
+		// Check for error
+		if (pid < 0) 
+		{
+            error = "Fork failed\n";
             write(STDERR_FILENO, error, strlen(error));
-            return 1;
+            continue;
         }
 
-        in_fp = fdopen(in_fd, "r");
-        if (!in_fp) {
-			error = "Can not fopen input file\n";
-            write(STDERR_FILENO, error, strlen(error));           
-			close(in_fd);
-            return 1;
+		// Child process
+        if (pid == 0) 
+		{
+			   if (execvp(buff[0], buff) == -1) {
+                error = "Error running execvp\n";
+                write(STDERR_FILENO, error, strlen(error));
+                exit(EXIT_FAILURE);
+            }
+        } 
+        
+		// Parent	
+		else 
+		{
+            pid_array[process_count++] = pid;
         }
 
-		// Get number of lines
-		for (c = getc(in_fp); c != EOF; c = getc(in_fp))
-		{
-        	if (c == '\n') 
-            {
-			line_number++;
-			}
-		}printf("line count %d\n", line_number);
-	}
+        // Free memory used by strdup
+        for (int k = 0; k < j; k++) {
+            free(buff[k]);
+        }
+    }
 
-	for (int i = 0; i < line_number; i++)
-	{
-		
-		pid_array[i] = fork();
-		
-		if (pid_array[i] < 0)
-		{
-			printf("%d: %d\n",i, pid_array[i]);
-		}
-		
-		
-		if (pid_array[i] == 0)
-		{
-			printf("%d: %d\n",i, pid_array[i]);
-		}
+    // Parent waits for all child processes
+    for (int i = 0; i < process_count; i++) {
+        waitpid(pid_array[i], NULL, 0);
+    }
 
+	// Close and free then exit using system cmd 
+    fclose(in_fp); if (line) free(line); exit(0);
 
-
-	}
-
-	fclose(in_fp);
+    return 0;
 }
