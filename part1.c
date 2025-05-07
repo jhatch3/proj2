@@ -7,107 +7,89 @@
 #include <stdlib.h>
 
 #define MAXPROCESS 500
+#define MAXARGS 100
 
-int main(int argc, char* argv[]) {
-    char* error;
-    char* in_file;
-    FILE* in_fp;
-    char* line = NULL;
+int main(int argc, char* argv[]) 
+{
+    // Validate Args
+    if (argc != 2) 
+    {
+        write(STDERR_FILENO, "Usage: ./part1 <input.txt>\n", 28);
+         exit(1);
+    }
+
+    // Open file 
+    FILE* in_fp = fopen(argv[1], "r");
+    if (!in_fp) 
+    {
+        write(STDERR_FILENO, "Cannot open input file\n", 24);
+        exit(-1);
+    }
+
+    char* lines[MAXPROCESS];
     size_t len = 0;
-    ssize_t read_int;
+    ssize_t read;
+    int line_number = 0;
+    char* line = NULL;
+
+    // Read all lines and store copies
+    while ((read = getline(&line, &len, in_fp)) != -1 && line_number < MAXPROCESS) 
+    {
+        lines[line_number++] = strdup(line);
+    }
+    free(line);
+    fclose(in_fp);
 
     pid_t pid_array[MAXPROCESS];
-    int process_count = 0;
 
-    // Validate argument
-    if (argc != 2) {
-        error = "Usage: ./part1 <input.txt>\n";
-        write(STDERR_FILENO, error, strlen(error));
-        return 1;
-    }
-
-	// Open input file as read only and get file descriptor
-    in_file = argv[1];
-    int in_fd = open(in_file, O_RDONLY);
-    if (in_fd == -1) {
-        error = "Cannot open input file\n";
-        write(STDERR_FILENO, error, strlen(error));
-        return 1;
-    }
-
-	// Open input file from file descriptor and get FILE*
-    in_fp = fdopen(in_fd, "r");
-    if (!in_fp) {
-        error = "Cannot fdopen input file\n";
-        write(STDERR_FILENO, error, strlen(error));
-        close(in_fd);
-        return 1;
-    }
-
-	// changed for (int i = 0; i < line_number, i++ )
-	// While there are still lines, read line and write to line (char*)
-    while ((read_int = getline(&line, &len, in_fp)) != -1) {
-
-        // Parse tokens
-        char* buff[100]; 
+    for (int i = 0; i < line_number; i++) 
+    {
+        // Tokenize line into command and args
+        char* argbuff[MAXARGS];
         int j = 0;
+
+	// Get tokens of each cmd line 
         char* token = strtok(line, " \n");
-        while (token != NULL) {
-            buff[j++] = strdup(token);
+        while (token != NULL) 
+	{
+            argbuff[j++] = strdup(token);
             token = strtok(NULL, " \n");
-        }
-		// And NULL to the end of the line
-        buff[j] = NULL; 
+        } 
+	    
+	argbuff[j] = NULL;
 
         // Fork process
-        pid_t pid = fork();
-        
-		// Check for error
-		if (pid < 0) 
-		{
-            error = "Fork failed\n";
-            write(STDERR_FILENO, error, strlen(error));
-            continue;
+        pid_array[i] = fork();
+	    
+        // Check for errors 
+        if (pid_array[i] < 0) 
+	{
+            write(STDERR_FILENO, "Fork failed\n", 12);
+            exit(-1);
         }
-
-		// Child process
-        if (pid == 0) 
-		{	
-			// If child process, run the command at buff[0]
-			// -1 -> Erorr
-			if (execvp(buff[0], buff) == -1) 
-			{	
-				// Error check
-                error = "Error running execvp\n";
-                write(STDERR_FILENO, error, strlen(error));
-                exit(EXIT_FAILURE);
+        // If child processes run cmd 
+        if (pid_array[i] == 0) 
+	{
+            if (execvp(argbuff[0], argbuff) == -1) 
+	    {
+                write(STDERR_FILENO, "Execvp failed\n", 14);
+                exit(-1);
             }
-        } 
-        
-		// Parent	
-		else 
-		{	
-			// If parent process, add to pid_array
-            pid_array[process_count++] = pid;
-			
         }
 
-        // Free memory used by strdup
+        // Free tokens
         for (int k = 0; k < j; k++) 
-		{
-            free(buff[k]);
+	{
+            free(argbuff[k]);
         }
+        free(lines[i]);
     }
 
-    // Parent waits for all child processes to be done
-	// Ensures that this main program wont end before all child process
-	// are done
-    for (int i = 0; i < process_count; i++) {
+    // Wait for all child processes
+    for (int i = 0; i < line_number; i++) 
+    {
         waitpid(pid_array[i], NULL, 0);
-    }
-
-	// Close, free then exit using system cmd after
-	// all child processses are done
-    fclose(in_fp); if (line) free(line); exit(0);
-
+    } 
+  // 
+  exit(0);
 }
