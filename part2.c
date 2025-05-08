@@ -20,7 +20,6 @@ int main(int argc, char* argv[])
     }
 
     sigset_t set;
-    pid_t children[MAXPROCESS];
 
     // Block SIGUSR1 
     sigemptyset(&set);
