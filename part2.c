@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
 
     sigset_t set;
 
-    // Block SIGUSR1 in parent (inherited by children)
+    // Block SIGUSR1 
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
     if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) 
@@ -54,7 +54,6 @@ int main(int argc, char* argv[])
 
     pid_t pid_array[MAXPROCESS];
 
-    // Fork and prepare each child process
     for (int i = 0; i < line_number; i++) 
     {
         // Tokenize line into command and args
@@ -72,7 +71,7 @@ int main(int argc, char* argv[])
         // Fork process
         pid_array[i] = fork();
         
-        // Error check for fork
+        // Error check 
         if (pid_array[i] < 0) 
         {
             write(STDERR_FILENO, "Fork failed\n", 12);
@@ -91,7 +90,7 @@ int main(int argc, char* argv[])
             // Execute command
             if (execvp(argbuff[0], argbuff) == -1) 
             {
-                perror("Execvp failed");
+                write(STDERR_FILENO,"Execvp failed\n", 15);
                 exit(-1);
             }
         }
@@ -111,9 +110,6 @@ int main(int argc, char* argv[])
     {
         kill(pid_array[i], SIGUSR1);
     }
-
-    // Optional: sleep to separate signal stages visually
-    // sleep(1);
 
     // Send SIGSTOP to pause all children
     // printf("- - - SENDING SIGSTOP - - -\n");
@@ -135,5 +131,5 @@ int main(int argc, char* argv[])
         waitpid(pid_array[i], NULL, 0);
     }
 
-    return 0;
+    exit(0);
 }
