@@ -48,30 +48,31 @@ int main(int argc, char* argv[])
         char* argbuff[MAXARGS];
         int j = 0;
 
-	// Get tokens of each cmd line 
+	    // Get tokens of each cmd line 
         char* token = strtok(line, " \n");
         while (token != NULL) 
-	{
+	    {
             argbuff[j++] = strdup(token);
             token = strtok(NULL, " \n");
         } 
 	    
-	argbuff[j] = NULL;
+	    argbuff[j] = NULL;
 
         // Fork process
         pid_array[i] = fork();
 	    
         // Check for errors 
         if (pid_array[i] < 0) 
-	{
+	    {
             write(STDERR_FILENO, "Fork failed\n", 12);
             exit(-1);
         }
+        
         // If child processes run cmd 
         if (pid_array[i] == 0) 
-	{
-            if (execvp(argbuff[0], argbuff) == -1) 
 	    {
+            if (execvp(argbuff[0], argbuff) == -1) 
+	        {
                 write(STDERR_FILENO, "Execvp failed\n", 14);
                 exit(-1);
             }
@@ -79,7 +80,7 @@ int main(int argc, char* argv[])
 
         // Free tokens
         for (int k = 0; k < j; k++) 
-	{
+	    {
             free(argbuff[k]);
         }
         free(lines[i]);
@@ -90,6 +91,6 @@ int main(int argc, char* argv[])
     {
         waitpid(pid_array[i], NULL, 0);
     } 
-  // 
+
   exit(0);
 }
