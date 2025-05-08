@@ -21,12 +21,16 @@ int main(int argc, char* argv[])
 
     sigset_t set;
 
-    // Block SIGUSR1 
+    // Block SIGUSR1 in parent (inherited by children)
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &set, NULL);
+    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) 
+    {
+        perror("sigprocmask");
+        exit(1);
+    }
 
-    // Open file 
+    // Open input file
     FILE* in_fp = fopen(argv[1], "r");
     if (!in_fp) 
     {
@@ -41,7 +45,7 @@ int main(int argc, char* argv[])
     char* line = NULL;
 
     // Read all lines and store copies
-    while ((read = getline(&line, &len, in_fp)) != -1) 
+    while ((read = getline(&line, &len, in_fp)) != -1 && line_number < MAXPROCESS) 
     {
         lines[line_number++] = strdup(line);
     }
@@ -50,48 +54,49 @@ int main(int argc, char* argv[])
 
     pid_t pid_array[MAXPROCESS];
 
+    // Fork and prepare each child process
     for (int i = 0; i < line_number; i++) 
     {
         // Tokenize line into command and args
         char* argbuff[MAXARGS];
         int j = 0;
 
-        // Get tokens of each cmd line from lines[i]
         char* token = strtok(lines[i], " \n");
-        while (token != NULL) 
+        while (token != NULL && j < MAXARGS - 1) 
         {
             argbuff[j++] = strdup(token);
             token = strtok(NULL, " \n");
-        } 
+        }
         argbuff[j] = NULL;
 
         // Fork process
         pid_array[i] = fork();
         
-        // Check for errors 
+        // Error check for fork
         if (pid_array[i] < 0) 
         {
             write(STDERR_FILENO, "Fork failed\n", 12);
             exit(-1);
         }
 
-        // If child processes run cmd 
+        // Child process
         if (pid_array[i] == 0) 
         {   
             int sig;
 
             // Wait for SIGUSR1 signal
+            //printf("Child PID %d: waiting for SIGUSR1...\n", getpid());
             sigwait(&set, &sig);
 
             // Execute command
             if (execvp(argbuff[0], argbuff) == -1) 
             {
-                write(STDERR_FILENO, "Execvp failed\n", 14);
+                perror("Execvp failed");
                 exit(-1);
             }
         }
 
-        // Free tokens
+        // Free tokenized args in parent
         for (int k = 0; k < j; k++) 
         {
             free(argbuff[k]);
@@ -100,29 +105,35 @@ int main(int argc, char* argv[])
         free(lines[i]);
     }
 
-    // Send signals (SIGUSR1)
+    // Send SIGUSR1 to all children to trigger exec
+    // printf("- - - SENDING SIGUSR1 - - -\n");
     for (int i = 0; i < line_number; i++)
     {
         kill(pid_array[i], SIGUSR1);
-    } 
+    }
 
-    // Send signal to stop each process
+    // Optional: sleep to separate signal stages visually
+    // sleep(1);
+
+    // Send SIGSTOP to pause all children
+    // printf("- - - SENDING SIGSTOP - - -\n");
     for (int i = 0; i < line_number; i++)
     {
         kill(pid_array[i], SIGSTOP);
     }
 
-    // Send SIGCONT to resume 
+    // Send SIGCONT to resume all children
+    // printf("- - - SENDING SIGCONT - - -\n");
     for (int i = 0; i < line_number; i++)
     {
         kill(pid_array[i], SIGCONT);
     }
 
-    // Wait for all children
+    // Wait for all children to finish
     for (int i = 0; i < line_number; i++)
-    {    
+    {
         waitpid(pid_array[i], NULL, 0);
-    } 
+    }
 
-    exit(0);
+    return 0;
 }
