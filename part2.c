@@ -30,6 +30,12 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    char* lines[MAXPROCESS];
+    size_t len = 0;
+    ssize_t read;
+    int line_number = 0;
+    char* line = NULL;
+    
     // Open input file
     FILE* in_fp = fopen(argv[1], "r");
     if (!in_fp) 
@@ -37,12 +43,6 @@ int main(int argc, char* argv[])
         write(STDERR_FILENO, "Cannot open input file\n", 24);
         exit(-1);
     }
-
-    char* lines[MAXPROCESS];
-    size_t len = 0;
-    ssize_t read;
-    int line_number = 0;
-    char* line = NULL;
 
     // Read all lines and store copies
     while ((read = getline(&line, &len, in_fp)) != -1 && line_number < MAXPROCESS) 
