@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
     ssize_t read;
     int line_number = 0;
     char* line = NULL;
-    
+
     // Open input file
     FILE* in_fp = fopen(argv[1], "r");
     if (!in_fp) 
