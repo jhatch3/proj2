@@ -101,6 +101,8 @@ void update_process_info(int index) {
 				}
 
 				process_table[index].cpu_time = utime + stime;
+				printf("DEBUG: PID %d utime=%ld stime=%ld total=%ld\n", pid, utime, stime, utime + stime);
+
 			}
 		}
         fclose(fp);
@@ -140,11 +142,6 @@ void alarm_handler(int sig)
     // Update and stop current process if it's still running
     if (!process_table[current_index].exited) {
         update_process_info(current_index);
-        
-        printf("===== Process %d status before stopping =====\n", process_table[current_index].pid);
-        print_process_info(current_index);
-        printf("============================================\n\n");
-        
         kill(process_table[current_index].pid, SIGSTOP);
     }
 
@@ -154,7 +151,7 @@ void alarm_handler(int sig)
         current_index = (current_index + 1) % total_processes;
     } while (process_table[current_index].exited && current_index != start);
 
-    // Resume and print info if process is still alive
+    // Resume and print info 
     if (!process_table[current_index].exited) {
         printf("===== Resuming process %d =====\n", process_table[current_index].pid);
         
@@ -162,7 +159,7 @@ void alarm_handler(int sig)
         kill(process_table[current_index].pid, SIGCONT);
 
         // Give the process a moment to update
-        usleep(200000);  // 10ms
+        usleep(200000);  
         
         // Update and print info after resume
         update_process_info(current_index);
