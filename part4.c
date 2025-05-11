@@ -74,33 +74,35 @@ void update_process_info(int index) {
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
     fp = fopen(path, "r");
     if (fp) {
-        if (fgets(buffer, sizeof(buffer), fp)) {
-            // The stat format is: pid (comm) state ppid... and then fields 14-15 are utime/stime
-            // We need to find the closing parenthesis to skip the command name
-            char *start = strchr(buffer, ')');
-            if (start) {
-                start += 2; // Skip past ") "
-                
-                // Count fields to get to utime and stime (fields 14 and 15)
-                char *token = strtok(start, " ");
-                int field_count = 1;
-                long utime = 0, stime = 0;
-                
-                while (token != NULL && field_count <= 15) {
-                    if (field_count == 14) {
-                        utime = atol(token);
-                    } else if (field_count == 15) {
-                        stime = atol(token);
-                    }
-                    token = strtok(NULL, " ");
-                    field_count++;
-                }
-                
-                if (field_count > 15) {
-                    process_table[index].cpu_time = utime + stime;
-                }
-            }
-        }
+        if (fgets(buffer, sizeof(buffer), fp)) 
+		{
+			// Find first ')' to skip the (comm) field
+			char *start = strchr(buffer, ')');
+			if (start) 
+			{
+				start++; // move past ')'
+				int field = 0;
+				long utime = 0, stime = 0;
+				char *token = strtok(start, " ");
+
+				while (token != NULL) 
+				{
+					field++;
+
+					// utime is field 14, stime is field 15
+					if (field == 14) utime = atol(token);
+					if (field == 15) 
+					{
+						stime = atol(token);
+						break;
+					}
+
+					token = strtok(NULL, " ");
+				}
+
+				process_table[index].cpu_time = utime + stime;
+			}
+		}
         fclose(fp);
     }
     
