@@ -15,7 +15,6 @@ typedef struct {
     pid_t pid;
     char name[64];
     int vmrss_kb;
-    long cpu_time;
     int exited;
     int status;
 } ProcessInfo;
@@ -50,8 +49,9 @@ void update_process_info(int index) {
         snprintf(path, sizeof(path), "/proc/%d/comm", pid);
         fp = fopen(path, "r");
         if (fp) {
-            if (fgets(process_table[index].name, sizeof(process_table[index].name), fp)) {
-                process_table[index].name[strcspn(process_table[index].name, "\n")] = 0; // remove newline
+            if (fgets(process_table[index].name, sizeof(process_table[index].name), fp)) 
+			{
+                process_table[index].name[strcspn(process_table[index].name, "\n")] = 0; 
             }
             fclose(fp);
         }
@@ -70,69 +70,21 @@ void update_process_info(int index) {
         fclose(fp);
     }
 
-    // Read CPU time - first try the stat file
-    snprintf(path, sizeof(path), "/proc/%d/stat", pid);
-    fp = fopen(path, "r");
-    if (fp) {
-        if (fgets(buffer, sizeof(buffer), fp)) 
-		{
-			// Find first ')' to skip the (comm) field
-			char *start = strchr(buffer, ')');
-			if (start) 
-			{
-				start++; // move past ')'
-				int field = 0;
-				long utime = 0, stime = 0;
-				char *token = strtok(start, " ");
-
-				while (token != NULL) 
-				{
-					field++;
-
-					// utime is field 14, stime is field 15
-					if (field == 14) utime = atol(token);
-					if (field == 15) 
-					{
-						stime = atol(token);
-						break;
-					}
-
-					token = strtok(NULL, " ");
-				}
-
-				process_table[index].cpu_time = utime + stime;
-				printf("DEBUG: PID %d utime=%ld stime=%ld total=%ld\n", pid, utime, stime, utime + stime);
-
-			}
-		}
-        fclose(fp);
-    }
-    
-    // If CPU time is still 0, try /proc/[pid]/times as a fallback
-    if (process_table[index].cpu_time == 0) {
-        snprintf(path, sizeof(path), "/proc/%d/times", pid);
-        fp = fopen(path, "r");
-        if (fp) {
-            long user_time = 0, system_time = 0;
-            if (fscanf(fp, "%ld %ld", &user_time, &system_time) == 2) {
-                process_table[index].cpu_time = user_time + system_time;
-            }
-            fclose(fp);
-        }
-    }
 }
 
-void print_process_info(int index) {
-    if (process_table[index].exited) {
+void print_process_info(int index) 
+{
+    if (process_table[index].exited) 
+	{
         printf("PID: %d | Status: Exited with code %d\n", 
                process_table[index].pid, 
                process_table[index].status);
-    } else {
-        printf("PID: %d | Name: %-10s | RSS: %5d KB | CPU time: %ld ticks\n",
+    } else 
+	{
+        printf("PID: %d | Name: %-10s | RSS: %5d KB | CPU Time 0 \n",
                process_table[index].pid,
                process_table[index].name[0] ? process_table[index].name : "Unknown",
-               process_table[index].vmrss_kb,
-               process_table[index].cpu_time);
+               process_table[index].vmrss_kb);
     }
 }
 
@@ -153,7 +105,8 @@ void alarm_handler(int sig)
 
     // Resume and print info 
     if (!process_table[current_index].exited) {
-        printf("===== Resuming process %d =====\n\n", process_table[current_index].pid);
+		printf("\n\n");
+        printf("===== Resuming process %d =====\n", process_table[current_index].pid);
         
         // Resume the process
         kill(process_table[current_index].pid, SIGCONT);
@@ -186,7 +139,6 @@ int main(int argc, char* argv[])
     sigaddset(&set, SIGUSR1);
     if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) 
     {
-        perror("sigprocmask");
         exit(1);
     }
 
@@ -217,7 +169,6 @@ int main(int argc, char* argv[])
         process_table[i].pid = 0;
         process_table[i].name[0] = '\0';
         process_table[i].vmrss_kb = 0;
-        process_table[i].cpu_time = 0;
         process_table[i].exited = 0;
         process_table[i].status = 0;
     }
@@ -269,7 +220,7 @@ int main(int argc, char* argv[])
             process_table[i].name[sizeof(process_table[i].name) - 1] = '\0'; // ensure null termination
         }
 
-        // Free tokenized args in parent
+        // Free args in parent
         for (int k = 0; k < j; k++) 
         {
             free(argbuff[k]);
@@ -333,13 +284,10 @@ int main(int argc, char* argv[])
                 }
             }
         }
-        
-        // Brief sleep to avoid high CPU usage
-        usleep(10000);  // 10ms
-    }
+            
+	}
 
     // Stop timer after all children exit
     alarm(0);
-    printf("All processes completed\n");
     exit(0);
 }
