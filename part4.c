@@ -162,7 +162,7 @@ void alarm_handler(int sig)
         kill(process_table[current_index].pid, SIGCONT);
 
         // Give the process a moment to update
-        usleep(10000);  // 10ms
+        usleep(200000)  // 10ms
         
         // Update and print info after resume
         update_process_info(current_index);
