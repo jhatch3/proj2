@@ -153,13 +153,13 @@ void alarm_handler(int sig)
 
     // Resume and print info 
     if (!process_table[current_index].exited) {
-        printf("===== Resuming process %d =====\n", process_table[current_index].pid);
+        printf("===== Resuming process %d =====\n\n", process_table[current_index].pid);
         
         // Resume the process
         kill(process_table[current_index].pid, SIGCONT);
 
         // Give the process a moment to update
-        usleep(200000);  
+        usleep(1000000);  
         
         // Update and print info after resume
         update_process_info(current_index);
