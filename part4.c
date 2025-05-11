@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <sys/sysinfo.h>
 
 #define MAXPROCESS 500
 #define MAXARGS 100
