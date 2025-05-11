@@ -6,7 +6,6 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <sys/sysinfo.h>
 
 #define MAXPROCESS 500
 #define MAXARGS 100
@@ -29,14 +28,17 @@ sig_atomic_t current_index = 0;
 unsigned int timer_time = 1;
 
 /* - - - - - - - - - - - HELPER FUNCTION FOR LOGGING - - - - - - - - - - - */
+
 void update_process_info(int index) {
     char path[256], buffer[1024];
     FILE *fp;
     pid_t pid = process_table[index].pid;
-
+    
     // Skip if process has already exited
-    if (process_table[index].exited) return;
-
+    if (process_table[index].exited) {
+        return;
+    }
+    
     // Check if process is still running
     if (kill(pid, 0) != 0) {
         process_table[index].exited = 1;
@@ -49,7 +51,7 @@ void update_process_info(int index) {
         fp = fopen(path, "r");
         if (fp) {
             if (fgets(process_table[index].name, sizeof(process_table[index].name), fp)) {
-                process_table[index].name[strcspn(process_table[index].name, "\n")] = 0;
+                process_table[index].name[strcspn(process_table[index].name, "\n")] = 0; // remove newline
             }
             fclose(fp);
         }
@@ -68,98 +70,125 @@ void update_process_info(int index) {
         fclose(fp);
     }
 
-    // Read CPU time (utime + stime)
+    // Read CPU time - first try the stat file
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
     fp = fopen(path, "r");
     if (fp) {
         if (fgets(buffer, sizeof(buffer), fp)) {
+            // The stat format is: pid (comm) state ppid... and then fields 14-15 are utime/stime
+            // We need to find the closing parenthesis to skip the command name
             char *start = strchr(buffer, ')');
             if (start) {
-                start += 2; // Skip ") "
+                start += 2; // Skip past ") "
+                
+                // Count fields to get to utime and stime (fields 14 and 15)
                 char *token = strtok(start, " ");
-                int field_count = 3;
+                int field_count = 1;
                 long utime = 0, stime = 0;
-
-                while (token != NULL) {
-                    if (field_count == 14) utime = atol(token);
-                    if (field_count == 15) {
+                
+                while (token != NULL && field_count <= 15) {
+                    if (field_count == 14) {
+                        utime = atol(token);
+                    } else if (field_count == 15) {
                         stime = atol(token);
-                        break;
                     }
                     token = strtok(NULL, " ");
                     field_count++;
                 }
-                process_table[index].cpu_time = utime + stime;
+                
+                if (field_count > 15) {
+                    process_table[index].cpu_time = utime + stime;
+                }
             }
         }
         fclose(fp);
+    }
+    
+    // If CPU time is still 0, try /proc/[pid]/times as a fallback
+    if (process_table[index].cpu_time == 0) {
+        snprintf(path, sizeof(path), "/proc/%d/times", pid);
+        fp = fopen(path, "r");
+        if (fp) {
+            long user_time = 0, system_time = 0;
+            if (fscanf(fp, "%ld %ld", &user_time, &system_time) == 2) {
+                process_table[index].cpu_time = user_time + system_time;
+            }
+            fclose(fp);
+        }
     }
 }
 
 void print_process_info(int index) {
     if (process_table[index].exited) {
-        printf("PID: %d | Status: Exited with code %d\n",
-               process_table[index].pid, process_table[index].status);
+        printf("PID: %d | Status: Exited with code %d\n", 
+               process_table[index].pid, 
+               process_table[index].status);
     } else {
-        long ticks_per_sec = sysconf(_SC_CLK_TCK);
-        float cpu_secs = process_table[index].cpu_time / (float)ticks_per_sec;
-        printf("PID: %d | Name: %-10s | RSS: %5d KB | CPU time: %.2f sec\n",
+        printf("PID: %d | Name: %-10s | RSS: %5d KB | CPU time: %ld ticks\n",
                process_table[index].pid,
                process_table[index].name[0] ? process_table[index].name : "Unknown",
                process_table[index].vmrss_kb,
-               cpu_secs);
+               process_table[index].cpu_time);
     }
 }
 
-/* - - - - - - - - - - - ALARM HANDLER - - - - - - - - - - - */
-void alarm_handler(int sig) {
+/* - - - - - - - - - - - HELPER FUNCTION FOR ALARM - - - - - - - - - - - */
+void alarm_handler(int sig)
+{
+    // Update and stop current process if it's still running
     if (!process_table[current_index].exited) {
         update_process_info(current_index);
+        
         printf("===== Process %d status before stopping =====\n", process_table[current_index].pid);
         print_process_info(current_index);
         printf("============================================\n\n");
+        
         kill(process_table[current_index].pid, SIGSTOP);
     }
 
-    // Move to next live process
-    int found = 0;
+    // Advance to the next alive process
     int start = current_index;
     do {
         current_index = (current_index + 1) % total_processes;
-        if (!process_table[current_index].exited) {
-            found = 1;
-            break;
-        }
-    } while (current_index != start);
+    } while (process_table[current_index].exited && current_index != start);
 
-    if (!found) return; // All processes exited
+    // Resume and print info if process is still alive
+    if (!process_table[current_index].exited) {
+        printf("===== Resuming process %d =====\n", process_table[current_index].pid);
+        
+        // Resume the process
+        kill(process_table[current_index].pid, SIGCONT);
 
-    printf("===== Resuming process %d (%s) =====\n",
-           process_table[current_index].pid, process_table[current_index].name);
-
-    kill(process_table[current_index].pid, SIGCONT);
-    usleep(50000); // Give time to run
-    update_process_info(current_index);
-    print_process_info(current_index);
-    alarm(timer_time);
+        // Give the process a moment to update
+        usleep(10000);  // 10ms
+        
+        // Update and print info after resume
+        update_process_info(current_index);
+        print_process_info(current_index);
+        
+        alarm(timer_time);
+    }
 }
 
-/* - - - - - - - - - - - MAIN FUNCTION - - - - - - - - - - - */
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
+/* - - - - - - - - - - - MAIN - - - - - - - - - - - */
+int main(int argc, char* argv[]) 
+{
+    // Validate Args
+    if (argc != 2) 
+    {
         write(STDERR_FILENO, "Usage: ./part4 <input.txt>\n", 28);
         exit(1);
     }
 
     sigset_t set;
+
+    // Block SIGUSR1 
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &set, NULL);
-
-    FILE* in_fp = fopen(argv[1], "r");
-    if (!in_fp) {
-        write(STDERR_FILENO, "Cannot open input file\n", 24);
-        exit(-1);
+    if (sigprocmask(SIG_BLOCK, &set, NULL) == -1) 
+    {
+        perror("sigprocmask");
+        exit(1);
     }
 
     char* lines[MAXPROCESS];
@@ -168,81 +197,136 @@ int main(int argc, char* argv[]) {
     int line_number = 0;
     char* line = NULL;
 
-    while ((read = getline(&line, &len, in_fp)) != -1 && line_number < MAXPROCESS) {
+    // Open input file
+    FILE* in_fp = fopen(argv[1], "r");
+    if (!in_fp) 
+    {
+        write(STDERR_FILENO, "Cannot open input file\n", 24);
+        exit(-1);
+    }
+
+    // Read all lines and store copies
+    while ((read = getline(&line, &len, in_fp)) != -1 && line_number < MAXPROCESS) 
+    {
         lines[line_number++] = strdup(line);
     }
     free(line);
     fclose(in_fp);
 
-    for (int i = 0; i < line_number; i++) {
+    // Initialize process table
+    for (int i = 0; i < MAXPROCESS; i++) {
+        process_table[i].pid = 0;
+        process_table[i].name[0] = '\0';
+        process_table[i].vmrss_kb = 0;
+        process_table[i].cpu_time = 0;
+        process_table[i].exited = 0;
+        process_table[i].status = 0;
+    }
+
+    // Fork child processes from each line of input
+    for (int i = 0; i < line_number; i++) 
+    {
+        // Tokenize line into command and args
         char* argbuff[MAXARGS];
         int j = 0;
 
         char* token = strtok(lines[i], " \n");
-        while (token && j < MAXARGS - 1) {
+        while (token != NULL && j < MAXARGS - 1) 
+        {
             argbuff[j++] = strdup(token);
             token = strtok(NULL, " \n");
         }
         argbuff[j] = NULL;
 
+        // Fork process
         process_table[i].pid = fork();
-        if (process_table[i].pid < 0) {
+        
+        // Error check 
+        if (process_table[i].pid < 0) 
+        {
             write(STDERR_FILENO, "Fork failed\n", 12);
             exit(-1);
         }
 
-        if (process_table[i].pid == 0) {
+        // Child process
+        if (process_table[i].pid == 0) 
+        {   
             int sig;
-            sigset_t child_set;
-            sigemptyset(&child_set);
-            sigaddset(&child_set, SIGUSR1);
-            sigprocmask(SIG_UNBLOCK, &child_set, NULL);
-            sigwait(&child_set, &sig);
-            execvp(argbuff[0], argbuff);
-            write(STDERR_FILENO,"Execvp failed\n", 15);
-            exit(-1);
+
+            // Wait for SIGUSR1 signal
+            sigwait(&set, &sig);
+
+            // Execute command    
+            if (execvp(argbuff[0], argbuff) == -1) 
+            {
+                write(STDERR_FILENO,"Execvp failed\n", 15);
+                exit(-1);
+            }
         }
 
+        // Save command name in parent process
         if (j > 0) {
             strncpy(process_table[i].name, argbuff[0], sizeof(process_table[i].name) - 1);
-            process_table[i].name[sizeof(process_table[i].name) - 1] = '\0';
+            process_table[i].name[sizeof(process_table[i].name) - 1] = '\0'; // ensure null termination
         }
 
-        for (int k = 0; k < j; k++) free(argbuff[k]);
+        // Free tokenized args in parent
+        for (int k = 0; k < j; k++) 
+        {
+            free(argbuff[k]);
+        }
+
         free(lines[i]);
     }
 
     total_processes = line_number;
 
-    for (int i = 0; i < total_processes; i++) kill(process_table[i].pid, SIGUSR1);
-    for (int i = 0; i < total_processes; i++) kill(process_table[i].pid, SIGSTOP);
+    // Send SIGUSR1 to exec
+    for (int i = 0; i < line_number; i++)
+    {
+        kill(process_table[i].pid, SIGUSR1);
+    }
 
+    // Send SIGSTOP to pause 
+    for (int i = 0; i < line_number; i++)
+    {
+        kill(process_table[i].pid, SIGSTOP);
+    }
+
+    // Setup alarm handler
     struct sigaction sa;
     sa.sa_handler = alarm_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     sigaction(SIGALRM, &sa, NULL);
 
-    for (int i = 0; i < total_processes; i++) update_process_info(i);
+    // Initial information collection for all processes
+    for (int i = 0; i < total_processes; i++) {
+        update_process_info(i);
+    }
 
+    // Resume the first child 
     printf("===== Starting execution with process %d =====\n", process_table[0].pid);
     kill(process_table[0].pid, SIGCONT);
     alarm(timer_time);
 
-    int remaining = total_processes;
-    while (remaining > 0) {
+    // Wait for all children to finish 
+    int processes_remaining = line_number;
+
+    while (processes_remaining > 0) {
         int status;
-        pid_t pid = waitpid(-1, &status, WNOHANG);
+        pid_t pid = waitpid(-1, &status, WNOHANG);  // Non-blocking wait
+        
         if (pid > 0) {
+            // Find which process exited
             for (int i = 0; i < total_processes; i++) {
                 if (process_table[i].pid == pid && !process_table[i].exited) {
                     process_table[i].exited = 1;
-                    remaining--;
+                    processes_remaining--;
+                    
                     if (WIFEXITED(status)) {
                         process_table[i].status = WEXITSTATUS(status);
                         printf("Process %d exited with status %d\n", pid, WEXITSTATUS(status));
-                    } else if (WIFSIGNALED(status)) {
-                        printf("Process %d terminated by signal %d\n", pid, WTERMSIG(status));
                     } else {
                         printf("Process %d terminated abnormally\n", pid);
                     }
@@ -250,10 +334,13 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        usleep(10000);
+        
+        // Brief sleep to avoid high CPU usage
+        usleep(10000);  // 10ms
     }
 
+    // Stop timer after all children exit
     alarm(0);
     printf("All processes completed\n");
-    return 0;
+    exit(0);
 }
