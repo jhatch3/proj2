@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -O0 -Wall -g
 
 # Source files and matching output names
 SRCS = part1.c part2.c part3.c part4.c iobound.c cpubound.c
