@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
       for(j = 0; j<100; j++) {
         i = i+(i*2);
       }
-      //check if done
+      //check if done`
       now = clock();
       duration =  (now - start)/(double) CLOCKS_PER_SEC;
       //printf("Duration: %f - Seconds: %d - condition: %d\n", duration, seconds, duration>=seconds);
