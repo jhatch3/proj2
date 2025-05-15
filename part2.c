@@ -110,6 +110,7 @@ int main(int argc, char* argv[])
     {
         kill(pid_array[i], SIGUSR1);
     }
+    sleep(1);
 
     // Send SIGSTOP to pause all children
     // printf("- - - SENDING SIGSTOP - - -\n");
@@ -117,6 +118,7 @@ int main(int argc, char* argv[])
     {
         kill(pid_array[i], SIGSTOP);
     }
+    sleep(1);
 
     // Send SIGCONT to resume all children
     // printf("- - - SENDING SIGCONT - - -\n");

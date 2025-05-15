@@ -15,6 +15,8 @@ typedef struct {
     pid_t pid;
     char name[64];
     int vmrss_kb;
+    int voluntary_ctxt_switches;
+    int threads;
     int exited;
     int status;
 } ProcessInfo;
@@ -28,7 +30,7 @@ unsigned int timer_time = 1;
 
 /* - - - - - - - - - - - HELPER FUNCTION FOR LOGGING - - - - - - - - - - - */
 
-void update_process_info(int index) {
+void update_process_info(int index) { 
     char path[256], buffer[1024];
     FILE *fp;
     pid_t pid = process_table[index].pid;
@@ -58,17 +60,30 @@ void update_process_info(int index) {
     }
 
     // Read memory usage (VmRSS)
-    snprintf(path, sizeof(path), "/proc/%d/status", pid);
-    fp = fopen(path, "r");
-    if (fp) {
-        while (fgets(buffer, sizeof(buffer), fp)) {
-            if (strncmp(buffer, "VmRSS:", 6) == 0) {
-                sscanf(buffer + 6, "%d", &process_table[index].vmrss_kb);
-                break;
-            }
-        }
-        fclose(fp);
-    }
+    // Read selected info from /proc/[pid]/status
+	snprintf(path, sizeof(path), "/proc/%d/status", pid);
+	fp = fopen(path, "r");
+	if (fp) 
+	{
+   		while (fgets(buffer, sizeof(buffer), fp)) 
+		{
+        	if (strncmp(buffer, "VmRSS:", 6) == 0) 
+			{
+            	sscanf(buffer + 6, "%d", &process_table[index].vmrss_kb);
+        	} 
+			
+			else if (strncmp(buffer, "voluntary_ctxt_switches:", 25) == 0) 
+			{
+            	sscanf(buffer + 25, "%d", &process_table[index].voluntary_ctxt_switches);
+       		} 
+			
+			else if (strncmp(buffer, "Threads:", 8) == 0)
+			{
+            	sscanf(buffer + 8, "%d", &process_table[index].threads);
+        	}
+    	}
+    fclose(fp);
+}
 
 }
 
@@ -81,11 +96,13 @@ void print_process_info(int index)
                process_table[index].status);
     } else 
 	{
-        printf("PID: %d | Name: %-10s | RSS: %5d KB | CPU Time 0 \n",
-               process_table[index].pid,
-               process_table[index].name[0] ? process_table[index].name : "Unknown",
-               process_table[index].vmrss_kb);
-    }
+        printf("PID: %d | Name: %-10s | RSS: %5d KB | Threads: %d | CtxSwitches: %d\n",
+       process_table[index].pid,
+       process_table[index].name[0] ? process_table[index].name : "Unknown",
+       process_table[index].vmrss_kb,
+       process_table[index].threads,
+       process_table[index].voluntary_ctxt_switches);
+	}
 }
 
 /* - - - - - - - - - - - HELPER FUNCTION FOR ALARM - - - - - - - - - - - */
@@ -265,7 +282,7 @@ int main(int argc, char* argv[])
 
     while (processes_remaining > 0) {
         int status;
-        pid_t pid = waitpid(-1, &status, WNOHANG);  // Non-blocking wait
+        pid_t pid = waitpid(-1, &status, WNOHANG);  
         
         if (pid > 0) {
             // Find which process exited

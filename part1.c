@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
         int j = 0;
 
 	    // Get tokens of each cmd line 
-        char* token = strtok(line, " \n");
+        char* token = strtok(lines[i], " \n");
         while (token != NULL) 
 	    {
             argbuff[j++] = strdup(token);
