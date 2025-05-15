@@ -200,7 +200,7 @@ int main(int argc, char* argv[])
         char* token = strtok(lines[i], " \n");
         while (token != NULL && j < MAXARGS - 1) 
         {
-            argbuff[j++] = strdup(token);
+            argbuff[j++] = (token);
             token = strtok(NULL, " \n");
         }
         argbuff[j] = NULL;
@@ -235,12 +235,6 @@ int main(int argc, char* argv[])
         if (j > 0) {
             strncpy(process_table[i].name, argbuff[0], sizeof(process_table[i].name) - 1);
             process_table[i].name[sizeof(process_table[i].name) - 1] = '\0'; // ensure null termination
-        }
-
-        // Free args in parent
-        for (int k = 0; k < j; k++) 
-        {
-            free(argbuff[k]);
         }
 
         free(lines[i]);

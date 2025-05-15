@@ -1,0 +1,29 @@
+jhatch3@ix-dev:~/proj2$ valgrind --leak-check=full --tool=memcheck ./part1 input.txt
+==1271705== Memcheck, a memory error detector
+==1271705== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==1271705== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==1271705== Command: ./part1 input.txt
+==1271705== 
+Execvp failed
+Process: 1271709 - Begining to write to file.
+Process: 1271710 - Begining calculation.
+total 594
+  1 .vscode                                  7 part4.c   12 part3      7 .part1.c.swp    7 makefile     1 input.txt     7 cpubound.c   12 ..
+  1 valgrind_logs                           12 part4      7 part2.c    7 part1.c         7 iobound.c    7 .gitignore   12 cpubound     12 .
+425 project-2-description-spring-2025.pdf    7 part3.c   12 part2     12 part1          12 iobound     12 .git          1 alarm.c
+==1271708== 
+==1271708== HEAP SUMMARY:
+==1271708==     in use at exit: 61 bytes in 3 blocks
+==1271708==   total heap usage: 8 allocs, 5 frees, 8,867 bytes allocated
+==1271708== 
+==1271708== LEAK SUMMARY:
+==1271708==    definitely lost: 0 bytes in 0 blocks
+==1271708==    indirectly lost: 0 bytes in 0 blocks
+==1271708==      possibly lost: 0 bytes in 0 blocks
+==1271708==    still reachable: 61 bytes in 3 blocks
+==1271708==         suppressed: 0 bytes in 0 blocks
+==1271708== Reachable blocks (those to which a pointer was found) are not shown.
+==1271708== To see them, rerun with: --leak-check=full --show-leak-kinds=all
+==1271708== 
+==1271708== For lists of detected and suppressed errors, rerun with: -s
+==1271708== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

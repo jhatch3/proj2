@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
         char* token = strtok(lines[i], " \n");
         while (token != NULL && j < MAXARGS - 1) 
         {
-            argbuff[j++] = strdup(token);
+            argbuff[j++] = (token);
             token = strtok(NULL, " \n");
         }
         argbuff[j] = NULL;
@@ -124,12 +124,6 @@ int main(int argc, char* argv[])
                 write(STDERR_FILENO,"Execvp failed\n", 15);
                 exit(-1);
             }
-        }
-
-        // Free tokenized args in parent
-        for (int k = 0; k < j; k++) 
-        {
-            free(argbuff[k]);
         }
 
         free(lines[i]);
